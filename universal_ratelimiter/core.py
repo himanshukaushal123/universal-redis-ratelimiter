@@ -53,7 +53,7 @@ class AsyncRateLimiter:
 
     async def close(self):
         if self.redis_client:
-            await self.redis_client.aclose()
+            await self.redis_client.close()
             self.redis_client = None
             
     async def is_allowed(self, client_id: str, limit: int, window_sec: int, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG) -> bool:

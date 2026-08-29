@@ -14,6 +14,7 @@ dependencies = [
 ]
 optional-dependencies.fastapi = ["fastapi>=0.68.0"]
 optional-dependencies.django = ["django>=3.2"]
+optional-dependencies.dev = ["pytest", "pytest-asyncio"]
 readme = "README.md"
 requires-python = ">=3.7"
 
