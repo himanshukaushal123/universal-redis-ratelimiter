@@ -25,5 +25,5 @@ venv/
 ENV/
 
 # Project Specific
-INTERVIEW_PREP.md
+tests.md
 test_logic.py
