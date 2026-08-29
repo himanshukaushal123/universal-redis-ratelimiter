@@ -6,6 +6,7 @@ A distributed, framework-agnostic rate limiter backed by Redis. Designed to prev
 - 🚀 **Framework Agnostic**: Native plugins for both Django and FastAPI.
 - 🔒 **Distributed Safety**: Uses atomic Redis Lua scripts + UUIDs to completely eliminate race conditions.
 - ⚙️ **Multi-Algorithmic**: Native support for configurable algorithms including `SLIDING_WINDOW_LOG`, `FIXED_WINDOW`, and `TOKEN_BUCKET`.
+- 🛡️ **Industry Standard Headers**: Automatically injects exact `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` payloads to all responses.
 
 ## Installation
 

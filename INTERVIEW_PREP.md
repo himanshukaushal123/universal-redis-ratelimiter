@@ -55,6 +55,8 @@ We implemented the **Strategy Design Pattern** by exposing an `Algorithm` Enum. 
    - **Trade-off Evaluation:** I exposed a `fail_open: bool` configuration so architects can explicitly choose their fallback priority. 
      - *Fail-Open (True)*: Prioritizes **Availability**. If the cache dies, the limiter silently passes traffic. Good for user experience, but risks downstream database overloads.
      - *Fail-Closed (False - Default)*: Prioritizes **Security/Stability**. If the cache dies, all traffic is stopped. Protects downstream databases from DDoS, but brings the system down for users.
+4. **Metadata Extraction without Extra Network Calls:** A beginner approach to populating `X-RateLimit` headers is executing secondary Redis queries (like `TTL` or `GET`) *after* the initial block checking. This doubles your database latency.
+   - **Solution:** I overhauled the atomic Lua Scripts to return an array payload `[allowed, remaining, reset_time_ms]`. The Python engine parses this securely into a `RateLimitResult` dataclass, allowing our framework interceptors to attach accurate HTTP headers (`X-RateLimit-Remaining` etc.) utilizing only a single ultra-fast database trip.
 
 ---
 
@@ -64,6 +66,7 @@ Pick the 1 or 2 bullets that best fit the "projects" or "experience" section of 
 
 *   **Architectured and implemented a framework-agnostic distributed rate limiter** in Python using Redis, successfully supporting both asynchronous (FastAPI) and synchronous (Django) architectures.
 *   **Engineered a multi-algorithmic rate-limiting engine** (Sliding Window Log, Token Bucket, Fixed Window) using the Strategy Pattern to dynamically map to distinct Redis Lua Scripts inside Python Enums.
+*   **Implemented industry-standard API Header contracts** (`X-RateLimit`) by refactoring Lua Engine responses into unified Python dataclasses, natively surfacing precise quota metadata to consuming downstream clients without secondary database latency.
 *   **Resolved distributed race conditions under highly concurrent loads** by wrapping multi-step Redis validations into atomic Lua scripts and orchestrating unique ID (UUID) injection to prevent subset collision.
 *   **Packaged and open-sourced the rate-limiting logic** into a universal, installable Python module, allowing engineers to effortlessly integrate the system via FastAPI Dependencies or Django Middleware decorators.
 
