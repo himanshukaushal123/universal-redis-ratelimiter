@@ -23,3 +23,6 @@ wheels/
 .venv
 venv/
 ENV/
+
+# Project Specific
+INTERVIEW_PREP.md
