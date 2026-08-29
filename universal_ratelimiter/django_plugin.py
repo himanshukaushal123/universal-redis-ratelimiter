@@ -23,12 +23,22 @@ def django_rate_limit(limiter: SyncRateLimiter, limit: int = 5, window_sec: int 
             else:
                 client_id = request.META.get('REMOTE_ADDR', "unknown")
 
-            allowed = limiter.is_allowed(client_id, limit, window_sec, algorithm)
+            result = limiter.evaluate(client_id, limit, window_sec, algorithm)
             
-            if not allowed:
-                return JsonResponse({"error": "Too Many Requests"}, status=429)
+            headers = {
+                "X-RateLimit-Limit": str(result.limit),
+                "X-RateLimit-Remaining": str(result.remaining),
+                "X-RateLimit-Reset": str(result.reset_epoch_ms // 1000)
+            }
+            
+            if not result.allowed:
+                resp = JsonResponse({"error": "Too Many Requests"}, status=429)
+            else:
+                resp = view_func(request, *args, **kwargs)
                 
-            return view_func(request, *args, **kwargs)
+            for k, v in headers.items():
+                resp[k] = v
+            return resp
         return _wrapped_view
     return decorator
 
@@ -46,11 +56,21 @@ def async_django_rate_limit(limiter: AsyncRateLimiter, limit: int = 5, window_se
             else:
                 client_id = request.META.get('REMOTE_ADDR', "unknown")
 
-            allowed = await limiter.is_allowed(client_id, limit, window_sec, algorithm)
+            result = await limiter.evaluate(client_id, limit, window_sec, algorithm)
             
-            if not allowed:
-                return JsonResponse({"error": "Too Many Requests"}, status=429)
+            headers = {
+                "X-RateLimit-Limit": str(result.limit),
+                "X-RateLimit-Remaining": str(result.remaining),
+                "X-RateLimit-Reset": str(result.reset_epoch_ms // 1000)
+            }
+            
+            if not result.allowed:
+                resp = JsonResponse({"error": "Too Many Requests"}, status=429)
+            else:
+                resp = await view_func(request, *args, **kwargs)
                 
-            return await view_func(request, *args, **kwargs)
+            for k, v in headers.items():
+                resp[k] = v
+            return resp
         return _wrapped_view
     return decorator

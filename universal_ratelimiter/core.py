@@ -4,10 +4,18 @@ import logging
 import redis
 import redis.asyncio as redis_async
 from typing import Any, Tuple
+from dataclasses import dataclass
 
 from .algorithms import Algorithm, SCRIPTS
 
 logger = logging.getLogger("universal_ratelimiter")
+
+@dataclass
+class RateLimitResult:
+    allowed: bool
+    limit: int
+    remaining: int
+    reset_epoch_ms: int
 
 def _prepare_lua_args(algorithm: Algorithm, client_id: str, limit: int, window_sec: int) -> Tuple[list, list]:
     now_ms = int(time.time() * 1000)
@@ -19,7 +27,7 @@ def _prepare_lua_args(algorithm: Algorithm, client_id: str, limit: int, window_s
         return [key], [now_ms, window_ms, limit, req_id]
         
     elif algorithm == Algorithm.FIXED_WINDOW:
-        return [key], [limit, window_sec]
+        return [key], [limit, window_sec, now_ms]
         
     elif algorithm == Algorithm.TOKEN_BUCKET:
         return [key], [limit, window_sec, now_ms]
@@ -56,17 +64,34 @@ class AsyncRateLimiter:
         if self.redis_client:
             await self.redis_client.close()
             self.redis_client = None
-            
-    async def is_allowed(self, client_id: str, limit: int, window_sec: int, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG) -> bool:
+
+    async def evaluate(self, client_id: str, limit: int, window_sec: int, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG) -> RateLimitResult:
         try:
             script = await self.load_script(algorithm)
             keys, args = _prepare_lua_args(algorithm, client_id, limit, window_sec)
             
-            allowed = await script(keys=keys, args=args)
-            return int(allowed) == 1
+            result = await script(keys=keys, args=args)
+            return RateLimitResult(
+                allowed=bool(result[0]),
+                limit=limit,
+                remaining=int(result[1]),
+                reset_epoch_ms=int(result[2])
+            )
         except redis.exceptions.RedisError as e:
             logger.error(f"Redis connection failed in RateLimiter (fail_open={self.fail_open}): {str(e)}")
-            return self.fail_open
+            fallback_allowed = self.fail_open
+            now_ms = int(time.time() * 1000)
+            return RateLimitResult(
+                allowed=fallback_allowed,
+                limit=limit,
+                remaining=limit if fallback_allowed else 0,
+                reset_epoch_ms=now_ms + (window_sec * 1000)
+            )
+
+    async def is_allowed(self, client_id: str, limit: int, window_sec: int, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG) -> bool:
+        """Legacy proxy for strictly boolean checks."""
+        res = await self.evaluate(client_id, limit, window_sec, algorithm)
+        return res.allowed
 
 
 class SyncRateLimiter:
@@ -94,13 +119,30 @@ class SyncRateLimiter:
             self._scripts[algorithm] = r.register_script(SCRIPTS[algorithm])
         return self._scripts[algorithm]
 
-    def is_allowed(self, client_id: str, limit: int, window_sec: int, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG) -> bool:
+    def evaluate(self, client_id: str, limit: int, window_sec: int, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG) -> RateLimitResult:
         try:
             script = self.load_script(algorithm)
             keys, args = _prepare_lua_args(algorithm, client_id, limit, window_sec)
             
-            allowed = script(keys=keys, args=args)
-            return int(allowed) == 1
+            result = script(keys=keys, args=args)
+            return RateLimitResult(
+                allowed=bool(result[0]),
+                limit=limit,
+                remaining=int(result[1]),
+                reset_epoch_ms=int(result[2])
+            )
         except redis.exceptions.RedisError as e:
             logger.error(f"Redis connection failed in RateLimiter (fail_open={self.fail_open}): {str(e)}")
-            return self.fail_open
+            fallback_allowed = self.fail_open
+            now_ms = int(time.time() * 1000)
+            return RateLimitResult(
+                allowed=fallback_allowed,
+                limit=limit,
+                remaining=limit if fallback_allowed else 0,
+                reset_epoch_ms=now_ms + (window_sec * 1000)
+            )
+
+    def is_allowed(self, client_id: str, limit: int, window_sec: int, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG) -> bool:
+        """Legacy proxy for strictly boolean checks."""
+        res = self.evaluate(client_id, limit, window_sec, algorithm)
+        return res.allowed

@@ -26,15 +26,20 @@ async def test_algorithmic_concurrency_and_uuid_collisions(algorithm):
     limit = 5
     window_sec = 2
 
-    # Fire 20 exact-concurrent requests
-    tasks = [limiter.is_allowed(client_id, limit, window_sec, algorithm) for _ in range(20)]
+    # Fire 20 exact-concurrent requests using evaluate instead of is_allowed
+    tasks = [limiter.evaluate(client_id, limit, window_sec, algorithm) for _ in range(20)]
     results = await asyncio.gather(*tasks)
 
     # Calculate results
-    allowed_count = sum(results)
+    allowed_count = sum([1 for r in results if r.allowed])
     rejected_count = len(results) - allowed_count
     
     assert allowed_count == limit, f"{algorithm.name} failed! Erroneously allowed {allowed_count} requests instead of {limit}."
     assert rejected_count == len(tasks) - limit
+
+    # Check headers on an allowed request
+    valid_result = next(r for r in results if r.allowed)
+    assert valid_result.remaining >= 0
+    assert valid_result.reset_epoch_ms > 0
     
     await limiter.close()
