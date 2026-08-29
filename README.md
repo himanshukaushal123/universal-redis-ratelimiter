@@ -13,12 +13,12 @@ You can install this package directly from GitHub. Choose the installation comma
 
 **For FastAPI:**
 ```bash
-pip install "universal-redis-ratelimiter[fastapi] @ git+https://github.com/YOUR_USERNAME/universal-redis-ratelimiter.git"
+pip install "universal-redis-ratelimiter[fastapi] @ git+https://github.com/himanshukaushal123/universal-redis-ratelimiter.git"
 ```
 
 **For Django:**
 ```bash
-pip install "universal-redis-ratelimiter[django] @ git+https://github.com/YOUR_USERNAME/universal-redis-ratelimiter.git"
+pip install "universal-redis-ratelimiter[django] @ git+https://github.com/himanshukaushal123/universal-redis-ratelimiter.git"
 ```
 
 ---
