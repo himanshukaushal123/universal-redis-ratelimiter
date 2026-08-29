@@ -50,6 +50,11 @@ We implemented the **Strategy Design Pattern** by exposing an `Algorithm` Enum. 
    - **Solution:** We wrapped the entire read-and-write logic inside **Redis Lua Scripts**. Redis is single-threaded, meaning Lua scripts execute exactly instruction-by-instruction. It guarantees atomic operations mapping multiple commands (`ZREM`, `ZCARD`, `ZADD`) as a single, uninterrupted transaction.
 2. **The Millisecond Overwrite Bug (Sliding Window Edge Case):** The Redis `ZADD` function operates on unique members. If two requests hit in the exact same millisecond, they have the exact same timestamp. Redis would treat the second request as a duplicate and just overwrite the old one, failing to count the second request!
    - **Solution:** We generated a unique **UUID on the Python layer** and appended it to the timestamp `"{timestamp}-{uuid}"` when inserting the Member into Redis. This ensures high-concurrent requests on the same millisecond remain distinct.
+3. **Dependency Outage Recovery (Fail-Open vs Fail-Closed):** If Redis crashes, a naive rate limiter crashes your entire API (returning 500 Internals). 
+   - **Solution:** We wrap all script executions in try/except blocks catching `redis.exceptions.RedisError`. 
+   - **Trade-off Evaluation:** I exposed a `fail_open: bool` configuration so architects can explicitly choose their fallback priority. 
+     - *Fail-Open (True)*: Prioritizes **Availability**. If the cache dies, the limiter silently passes traffic. Good for user experience, but risks downstream database overloads.
+     - *Fail-Closed (False - Default)*: Prioritizes **Security/Stability**. If the cache dies, all traffic is stopped. Protects downstream databases from DDoS, but brings the system down for users.
 
 ---
 

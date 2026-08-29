@@ -31,10 +31,11 @@ class AsyncRateLimiter:
     """
     Async Redis-backed rate limiter instance. (For FastAPI or modern async Frameworks)
     """
-    def __init__(self, redis_url: str):
+    def __init__(self, redis_url: str, fail_open: bool = False):
         self.redis_url = redis_url
         self.redis_client = None
         self._scripts = {}
+        self.fail_open = fail_open
 
     async def get_redis_pool(self) -> redis_async.Redis:
         if self.redis_client is None:
@@ -57,21 +58,26 @@ class AsyncRateLimiter:
             self.redis_client = None
             
     async def is_allowed(self, client_id: str, limit: int, window_sec: int, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG) -> bool:
-        script = await self.load_script(algorithm)
-        keys, args = _prepare_lua_args(algorithm, client_id, limit, window_sec)
-        
-        allowed = await script(keys=keys, args=args)
-        return int(allowed) == 1
+        try:
+            script = await self.load_script(algorithm)
+            keys, args = _prepare_lua_args(algorithm, client_id, limit, window_sec)
+            
+            allowed = await script(keys=keys, args=args)
+            return int(allowed) == 1
+        except redis.exceptions.RedisError as e:
+            logger.error(f"Redis connection failed in RateLimiter (fail_open={self.fail_open}): {str(e)}")
+            return self.fail_open
 
 
 class SyncRateLimiter:
     """
     Synchronous Redis-backed rate limiter instance. (For Django)
     """
-    def __init__(self, redis_url: str):
+    def __init__(self, redis_url: str, fail_open: bool = False):
         self.redis_url = redis_url
         self.redis_client = None
         self._scripts = {}
+        self.fail_open = fail_open
 
     def get_redis_pool(self) -> redis.Redis:
         if self.redis_client is None:
@@ -89,8 +95,12 @@ class SyncRateLimiter:
         return self._scripts[algorithm]
 
     def is_allowed(self, client_id: str, limit: int, window_sec: int, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG) -> bool:
-        script = self.load_script(algorithm)
-        keys, args = _prepare_lua_args(algorithm, client_id, limit, window_sec)
-        
-        allowed = script(keys=keys, args=args)
-        return int(allowed) == 1
+        try:
+            script = self.load_script(algorithm)
+            keys, args = _prepare_lua_args(algorithm, client_id, limit, window_sec)
+            
+            allowed = script(keys=keys, args=args)
+            return int(allowed) == 1
+        except redis.exceptions.RedisError as e:
+            logger.error(f"Redis connection failed in RateLimiter (fail_open={self.fail_open}): {str(e)}")
+            return self.fail_open

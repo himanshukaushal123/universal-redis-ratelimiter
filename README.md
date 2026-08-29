@@ -50,6 +50,20 @@ async def get_data():
     return {"message": "Success! You are within your rate limit."}
 ```
 
+## Handling Redis Failures (Fail-Open vs Fail-Closed)
+
+In distributed systems, what happens if your rate-limiting dependency (Redis) goes offline? This package allows you to explicitly configure your fallback behavior using the `fail_open` parameter:
+
+```python
+# Fail-Closed (Default): 
+# If Redis goes down, all requests are safely blocked to protect your databases.
+limiter = AsyncRateLimiter("redis://localhost:6379/0", fail_open=False)
+
+# Fail-Open (Availability explicitly prioritized): 
+# If Redis goes down, requests are silently allowed through without rate limiting.
+limiter = AsyncRateLimiter("redis://localhost:6379/0", fail_open=True)
+```
+
 ---
 
 ## Quickstart: Django
