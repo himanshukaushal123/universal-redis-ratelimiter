@@ -26,3 +26,4 @@ ENV/
 
 # Project Specific
 INTERVIEW_PREP.md
+test_logic.py
