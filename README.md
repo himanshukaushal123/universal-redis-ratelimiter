@@ -147,3 +147,13 @@ def my_protected_view(request):
 
 ## How It Works
 The engine uses **Atomic Lua Scripts** dynamically routed via an Enum configuration. When multiple concurrent requests occur on horizontally scaled servers at the exact same millisecond, the Lua scripts utilize UUID generation combined with atomic executions to mathematically guarantee that your exact algorithmic limit will never be exceeded via race condition bypassing.
+
+---
+
+## Known Limitations: Redis Cluster
+
+Currently, this library is out-of-the-box optimized for **Single-Node** and **Redis Sentinel** architectures via standard connection pools.
+
+While our underlying Lua scripts are rigorously well-behaved (they only ever operate on a single `KEYS[1]` parameter to explicitly avoid the infamous Redis Cluster `CROSSSLOT Keys in request don't hash to the same slot` exceptions), the underlying engine currently automatically instantiates standard `redis.Redis` and `redis.asyncio.Redis` network clients. 
+
+If your ecosystem runs a strictly distributed **Redis Cluster**, the rate limiter logic itself is completely hash-slot safe, but you will need to override the connection pool logic within `core.py` to instantiate `redis.cluster.RedisCluster` clients natively instead of the standard client to allow correct underlying slot routing.
