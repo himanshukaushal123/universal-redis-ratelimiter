@@ -1,5 +1,6 @@
 from functools import wraps
 import asyncio
+from typing import Callable, Optional
 try:
     from django.http import JsonResponse
 except ImportError:
@@ -8,21 +9,30 @@ except ImportError:
 from .core import SyncRateLimiter, AsyncRateLimiter
 from .algorithms import Algorithm
 
-def django_rate_limit(limiter: SyncRateLimiter, limit: int = 5, window_sec: int = 10, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG):
+def get_django_client_ip(request) -> str:
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        return x_forwarded_for.split(',')[0]
+    return request.META.get('REMOTE_ADDR', "unknown")
+
+def django_rate_limit(
+    limiter: SyncRateLimiter, 
+    limit: int = 5, 
+    window_sec: int = 10, 
+    algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG,
+    client_id_extractor: Optional[Callable] = None
+):
     """
     Django decorator to rate-limit a view synchronously.
     Returns 429 JSON response if limit is exceeded.
     """
+    extractor = client_id_extractor or get_django_client_ip
+
     def decorator(view_func):
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
-            # Extract Client IP from Django's HttpRequest
-            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-            if x_forwarded_for:
-                client_id = x_forwarded_for.split(',')[0]
-            else:
-                client_id = request.META.get('REMOTE_ADDR', "unknown")
-
+            client_id = extractor(request)
+            
             result = limiter.evaluate(client_id, limit, window_sec, algorithm)
             
             headers = {
@@ -42,20 +52,24 @@ def django_rate_limit(limiter: SyncRateLimiter, limit: int = 5, window_sec: int 
         return _wrapped_view
     return decorator
 
-def async_django_rate_limit(limiter: AsyncRateLimiter, limit: int = 5, window_sec: int = 10, algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG):
+def async_django_rate_limit(
+    limiter: AsyncRateLimiter, 
+    limit: int = 5, 
+    window_sec: int = 10, 
+    algorithm: Algorithm = Algorithm.SLIDING_WINDOW_LOG,
+    client_id_extractor: Optional[Callable] = None
+):
     """
     Asynchronous Django decorator to rate-limit an `async def` view.
     Returns 429 JSON response if limit is exceeded.
     """
+    extractor = client_id_extractor or get_django_client_ip
+
     def decorator(view_func):
         @wraps(view_func)
         async def _wrapped_view(request, *args, **kwargs):
-            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-            if x_forwarded_for:
-                client_id = x_forwarded_for.split(',')[0]
-            else:
-                client_id = request.META.get('REMOTE_ADDR', "unknown")
-
+            client_id = extractor(request)
+            
             result = await limiter.evaluate(client_id, limit, window_sec, algorithm)
             
             headers = {

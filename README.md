@@ -102,5 +102,48 @@ async def my_async_protected_view(request):
     return JsonResponse({"message": "Success! Async Django rate limit passed."})
 ```
 
+---
+
+## Pluggable Key Strategies (API Key, User ID, JWT, etc.)
+
+By default, the rate limiter uses the incoming IP address as the unique limit identifier. In production workloads, you often need to limit by **User ID**, **JWT token**, or a specified **API Key**. 
+
+Both our Django and FastAPI plugins securely support completely pluggable key extraction via the `client_id_extractor` parameter.
+
+### FastAPI Example: Rate-Limit per API Key
+```python
+from fastapi import Request
+
+def extract_api_key(request: Request) -> str:
+    # Read a custom header overriding the default IP check
+    return request.headers.get("X-API-KEY", "anonymous")
+
+rate_limit_dep = RateLimitDependency(
+    limiter, 
+    limit=5, 
+    window_sec=10, 
+    client_id_extractor=extract_api_key
+)
+```
+
+### Django Example: Rate-Limit per User ID
+```python
+def extract_user_id(request) -> str:
+    # If the user is authenticated, isolate their limit per user_id; 
+    # Otherwise, fallback safely to their IP address
+    if request.user.is_authenticated:
+        return f"user:{request.user.id}"
+    return request.META.get('REMOTE_ADDR', "unknown")
+
+@django_rate_limit(
+    limiter, 
+    limit=5, 
+    window_sec=10, 
+    client_id_extractor=extract_user_id
+)
+def my_protected_view(request):
+    pass
+```
+
 ## How It Works
 The engine uses **Atomic Lua Scripts** dynamically routed via an Enum configuration. When multiple concurrent requests occur on horizontally scaled servers at the exact same millisecond, the Lua scripts utilize UUID generation combined with atomic executions to mathematically guarantee that your exact algorithmic limit will never be exceeded via race condition bypassing.
