@@ -1,5 +1,9 @@
 # Universal Redis Rate Limiter
 
+[![CI](https://github.com/himanshukaushal123/universal-redis-ratelimiter/actions/workflows/ci.yml/badge.svg)](https://github.com/himanshukaushal123/universal-redis-ratelimiter/actions/workflows/ci.yml)
+![Tests](https://img.shields.io/badge/Tests-8%20passing-brightgreen)
+![Python](https://img.shields.io/badge/python-3.7%2B-blue.svg)
+
 A distributed, framework-agnostic rate limiter backed by Redis. Designed to prevent race conditions during horizontally scaled, distributed use and provides out-of-the-box support for both **FastAPI** (async) and **Django** (sync,async).
 
 ## Features
